@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JARVIS 2.0 - Mobile</title>
+  <style>
+    body {
+      background-color: #0b0f17;
+      color: #c9d1d9;
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 700px;
+      margin: auto;
+      background: rgba(15, 20, 30, 0.9);
+      padding: 25px;
+      border-radius: 16px;
+      box-shadow: 0 0 30px rgba(88, 166, 255, 0.2);
+    }
+    h1 {
+      color: #58a6ff;
+      text-align: center;
+    }
+    .response-box {
+      background-color: #161b22;
+      padding: 15px;
+      border-radius: 10px;
+      margin-top: 20px;
+      min-height: 150px;
+    }
+    .controls {
+      margin-top: 20px;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+    button {
+      padding: 12px 20px;
+      font-size: 1rem;
+      background-color: #3fb950;
+      border: none;
+      border-radius: 10px;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #2ea043;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>JARVIS 2.0</h1>
+    <div class="response-box" id="responseBox">Initializing...</div>
+    <div class="controls">
+      <button onclick="toggleListening()">🎤 Toggle Listening</button>
+      <button onclick="resetJarvis()">🔄 Reset</button>
+    </div>
+  </div>
+  <script>
+    const responseBox = document.getElementById('responseBox');
+    let recognition;
+    let isListening = false;
+    let synth = window.speechSynthesis;
+    let selectedVoice;
+
+    function speak(text) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.voice = selectedVoice;
+      utterance.lang = selectedVoice?.lang || 'hi-IN';
+      utterance.pitch = 1;
+      utterance.rate = 1;
+      synth.speak(utterance);
+    }
+
+    function rememberUser(name, mood, goal) {
+      localStorage.setItem('jarvisUser', JSON.stringify({ name, mood, goal }));
+    }
+
+    function getUserMemory() {
+      return JSON.parse(localStorage.getItem('jarvisUser') || '{}');
+    }
+
+    function respond(msg) {
+      responseBox.innerText = msg;
+      speak(msg);
+    }
+
+    async function loadVoices() {
+      return new Promise(resolve => {
+        let voices = synth.getVoices();
+        if (voices.length) {
+          selectedVoice = voices.find(v => v.lang.includes('hi') && v.name.toLowerCase().includes('male')) || voices[0];
+          resolve();
+        } else {
+          synth.onvoiceschanged = () => {
+            voices = synth.getVoices();
+            selectedVoice = voices.find(v => v.lang.includes('hi') && v.name.toLowerCase().includes('male')) || voices[0];
+            resolve();
+          };
+        }
+      });
+    }
+
+    function processCommand(command) {
+      const lower = command.toLowerCase();
+      const memory = getUserMemory();
+
+      if (lower.includes("mera naam")) {
+        const name = command.split("naam")[1]?.trim();
+        rememberUser(name, memory.mood, memory.goal);
+        respond(`Aapka naam ${name} yaad rakh liya hai.`);
+      } else if (lower.includes("goal")) {
+        const goal = command.split("goal")[1]?.trim();
+        rememberUser(memory.name, memory.mood, goal);
+        respond(`Goal '${goal}' set kar diya hai.`);
+      } else if (lower.includes("weather") || lower.includes("mausam")) {
+        window.open("https://www.google.com/search?q=weather", "_blank");
+        respond("Mausam ki jaankari dikh raha hoon.");
+      } else if (lower.includes("youtube")) {
+        window.open("https://www.youtube.com", "_blank");
+        respond("YouTube khol raha hoon.");
+      } else if (lower.includes("news") || lower.includes("khabar")) {
+        window.open("https://news.google.com", "_blank");
+        respond("Khabrein dikh raha hoon.");
+      } else if (lower.includes("whatsapp") && lower.includes("message")) {
+        let msg = command.split("message")[1]?.trim();
+        let number = "91XXXXXXXXXX"; // Replace with actual number
+        window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, "_blank");
+        respond("WhatsApp pe message bhej raha hoon.");
+      } else if (lower.includes("call")) {
+        let tel = "tel:91XXXXXXXXXX"; // Replace with actual number
+        window.location.href = tel;
+        respond("Calling now...");
+      } else if (lower.includes("time") || lower.includes("samay")) {
+        const now = new Date();
+        respond(`Abhi ${now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} baj rahe hain.`);
+      } else {
+        respond("Command samajh nahi aaya.");
+      }
+    }
+
+    function toggleListening() {
+      if (isListening) {
+        recognition.stop();
+        isListening = false;
+        respond("Listening stopped.");
+      } else {
+        recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.lang = 'hi-IN';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+        recognition.onstart = () => respond("Sun raha hoon...");
+        recognition.onresult = (event) => {
+          const transcript = event.results[0][0].transcript;
+          processCommand(transcript);
+        };
+        recognition.onerror = (e) => respond("Error: " + e.error);
+        recognition.start();
+        isListening = true;
+      }
+    }
+
+    function resetJarvis() {
+      localStorage.clear();
+      respond("Memory reset kar diya gaya hai.");
+    }
+
+    window.onload = async () => {
+      await loadVoices();
+      respond("JARVIS 2.0 tayaar hai. Aap kya karna chahenge?");
+    }
+  </script>
+</body>
+</html>
