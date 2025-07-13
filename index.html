@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JARVIS 2.0 - Mobile</title>
+  <title>JARVIS 4.0 - Voice Assistant with Reminders</title>
   <style>
     body {
       background-color: #0b0f17;
@@ -53,7 +53,7 @@
 </head>
 <body>
   <div class="container">
-    <h1>JARVIS 2.0</h1>
+    <h1>JARVIS 4.0</h1>
     <div class="response-box" id="responseBox">Initializing...</div>
     <div class="controls">
       <button onclick="toggleListening()">🎤 Toggle Listening</button>
@@ -66,11 +66,13 @@
     let isListening = false;
     let synth = window.speechSynthesis;
     let selectedVoice;
+    const wakeWords = ["hey jarvis", "ok jarvis"];
+    let reminders = [];
 
     function speak(text) {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.voice = selectedVoice;
-      utterance.lang = selectedVoice?.lang || 'hi-IN';
+      utterance.lang = selectedVoice?.lang || 'en-IN';
       utterance.pitch = 1;
       utterance.rate = 1;
       synth.speak(utterance);
@@ -93,12 +95,12 @@
       return new Promise(resolve => {
         let voices = synth.getVoices();
         if (voices.length) {
-          selectedVoice = voices.find(v => v.lang.includes('hi') && v.name.toLowerCase().includes('male')) || voices[0];
+          selectedVoice = voices.find(v => v.lang.includes('en-IN') && v.name.toLowerCase().includes('male')) || voices[0];
           resolve();
         } else {
           synth.onvoiceschanged = () => {
             voices = synth.getVoices();
-            selectedVoice = voices.find(v => v.lang.includes('hi') && v.name.toLowerCase().includes('male')) || voices[0];
+            selectedVoice = voices.find(v => v.lang.includes('en-IN') && v.name.toLowerCase().includes('male')) || voices[0];
             resolve();
           };
         }
@@ -109,39 +111,72 @@
       const lower = command.toLowerCase();
       const memory = getUserMemory();
 
-      if (lower.includes("mera naam")) {
-        const name = command.split("naam")[1]?.trim();
+      if (!wakeWords.some(w => lower.includes(w))) return;
+
+      if (lower.includes("my name is")) {
+        const name = lower.split("my name is")[1]?.trim();
         rememberUser(name, memory.mood, memory.goal);
-        respond(`Aapka naam ${name} yaad rakh liya hai.`);
-      } else if (lower.includes("goal")) {
-        const goal = command.split("goal")[1]?.trim();
+        respond(`Okay ${name}, I will remember your name.`);
+
+      } else if (lower.includes("my goal is")) {
+        const goal = lower.split("my goal is")[1]?.trim();
         rememberUser(memory.name, memory.mood, goal);
-        respond(`Goal '${goal}' set kar diya hai.`);
-      } else if (lower.includes("weather") || lower.includes("mausam")) {
+        respond(`Your goal '${goal}' has been saved.`);
+
+      } else if (lower.includes("weather")) {
         window.open("https://www.google.com/search?q=weather", "_blank");
-        respond("Mausam ki jaankari dikh raha hoon.");
+        respond("Showing you the weather.");
+
       } else if (lower.includes("youtube")) {
         window.open("https://www.youtube.com", "_blank");
-        respond("YouTube khol raha hoon.");
-      } else if (lower.includes("news") || lower.includes("khabar")) {
+        respond("Opening YouTube.");
+
+      } else if (lower.includes("news")) {
         window.open("https://news.google.com", "_blank");
-        respond("Khabrein dikh raha hoon.");
+        respond("Here are the news headlines.");
+
       } else if (lower.includes("whatsapp") && lower.includes("message")) {
         let msg = command.split("message")[1]?.trim();
-        let number = "91XXXXXXXXXX"; // Replace with actual number
+        let number = "91XXXXXXXXXX";
         window.open(`https://wa.me/${number}?text=${encodeURIComponent(msg)}`, "_blank");
-        respond("WhatsApp pe message bhej raha hoon.");
+        respond("Sending message on WhatsApp.");
+
       } else if (lower.includes("call")) {
-        let tel = "tel:91XXXXXXXXXX"; // Replace with actual number
+        let tel = "tel:91XXXXXXXXXX";
         window.location.href = tel;
         respond("Calling now...");
-      } else if (lower.includes("time") || lower.includes("samay")) {
+
+      } else if (lower.includes("time")) {
         const now = new Date();
-        respond(`Abhi ${now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} baj rahe hain.`);
+        respond(`It's ${now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}.`);
+
+      } else if (lower.includes("remind me")) {
+        const reminderText = command.split("remind me")[1]?.trim();
+        if (reminderText) {
+          const time = Date.now() + 60000; // 1 min default
+          reminders.push({ text: reminderText, time });
+          respond(`Reminder set for: ${reminderText}`);
+        } else {
+          respond("Reminder text not understood.");
+        }
+
       } else {
-        respond("Command samajh nahi aaya.");
+        respond("Sorry, I didn’t understand that.");
       }
     }
+
+    function checkReminders() {
+      const now = Date.now();
+      reminders = reminders.filter(reminder => {
+        if (now >= reminder.time) {
+          respond(`Reminder: ${reminder.text}`);
+          return false;
+        }
+        return true;
+      });
+    }
+
+    setInterval(checkReminders, 10000);
 
     function toggleListening() {
       if (isListening) {
@@ -150,15 +185,26 @@
         respond("Listening stopped.");
       } else {
         recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-        recognition.lang = 'hi-IN';
+        recognition.lang = 'en-IN';
         recognition.interimResults = false;
         recognition.maxAlternatives = 1;
-        recognition.onstart = () => respond("Sun raha hoon...");
+
+        recognition.onstart = () => respond("I am listening...");
         recognition.onresult = (event) => {
           const transcript = event.results[0][0].transcript;
-          processCommand(transcript);
+          if (transcript.length > 2) {
+            processCommand(transcript);
+          }
         };
-        recognition.onerror = (e) => respond("Error: " + e.error);
+        recognition.onerror = (e) => {
+          if (e.error !== 'no-speech') {
+            respond("Error: " + e.error);
+          }
+        };
+        recognition.onend = () => {
+          if (isListening) recognition.start();
+        }
+
         recognition.start();
         isListening = true;
       }
@@ -166,12 +212,13 @@
 
     function resetJarvis() {
       localStorage.clear();
-      respond("Memory reset kar diya gaya hai.");
+      reminders = [];
+      respond("Memory and reminders cleared.");
     }
 
     window.onload = async () => {
       await loadVoices();
-      respond("JARVIS 2.0 tayaar hai. Aap kya karna chahenge?");
+      respond("JARVIS 4.0 online. Say 'Hey Jarvis' to begin.");
     }
   </script>
 </body>
